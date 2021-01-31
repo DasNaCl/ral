@@ -255,6 +255,37 @@ struct Interpreter
     }
   }
 
+  void call(Fn* foo, std::vector<std::size_t>&& args)
+  {
+    assert(foo && foo->params.size() == args.size());
+
+    // TODO: Consider export/import
+    //TODO: only let/unlet non-mut args
+    // Let the arguments
+    for(std::size_t i = 0; i < foo->params.size(); ++i)
+    {
+      auto& p = foo->params[i];
+
+      auto it = vars.find(p.name);
+      assert(it == vars.end());
+
+      vars.emplace(p.name, args[i]);
+    }
+    // Run function body
+    run(foo->body.get());
+    // Unlet the arguments
+    for(std::size_t i = 0; i < foo->params.size(); ++i)
+    {
+      auto& p = foo->params[i];
+
+      auto it = vars.find(p.name);
+      assert(it != vars.end());
+
+      assert(it->second == args[i]);
+      vars.erase(it);
+    }
+  }
+
   std::ostream& os;
   std::vector<std::size_t> stack;
   std::map<std::string, std::size_t> vars;
@@ -269,9 +300,12 @@ void interpret(std::ostream& os, const std::vector<Fn::Ptr>& nods)
     if(x->name == "main")
       main = x.get();
   assert(main && "No entry point");
+  // TODO: check main for correct return type
 
-  // TODO: populate parameters of main function
-  interp.run(main->body.get());
+  // TODO: check for argc/argv with correct types
+  assert(main->params.size() == 1 && "Entry point must have exactly one argument.");
+
+  interp.call(main, { 0 });
 
   assert(interp.vars.empty() && "all lets must be cleaned up with an unlet");
 }
