@@ -5,6 +5,7 @@
 #include <set>
 
 enum class TypeKind {
+  Void,
   Int,
   Ptr,
   Fn,
@@ -31,8 +32,9 @@ struct Type {
 
 Type::Ptr str2typ(const std::string& str);
 
-Type::Ptr fn_type(std::vector<Type::Ptr>&& params, Type::Ptr&& ret);
+Type::Ptr void_type();
 Type::Ptr int_type();
+Type::Ptr fn_type(std::vector<Type::Ptr>&& params, Type::Ptr&& ret);
 
 bool is_int(Type& typ);
 

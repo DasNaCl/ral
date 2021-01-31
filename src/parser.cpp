@@ -81,6 +81,8 @@ private:
   // always uses old for the error
   Node::Ptr mk_error();
 
+  Type::Ptr parse_type();
+
   Fn::Ptr parse_fn();
 
   Node::Ptr parse_expr_stmt();
@@ -173,6 +175,26 @@ Node::Ptr parser::mk_error()
 
 ////// Parsing 
 
+Type::Ptr parser::parse_type()
+{
+  if(accept(token_kind::LParen))
+  {
+    if(accept(token_kind::RParen))
+      return void_type();
+
+    auto ty = parse_type();
+    expect(token_kind::RParen);
+    return ty;
+  }
+  parse_identifier();
+
+  auto ty = str2typ(old.data.str());
+  if(!ty)
+    return nullptr;
+
+  return ty;
+}
+
 // fn IDENTIFIER ( IDENTIFIER : TYPE,* ) -> TYPE := stmt
 Fn::Ptr parser::parse_fn()
 {
@@ -195,10 +217,8 @@ Fn::Ptr parser::parse_fn()
     parse_identifier();
     auto par_name = old.data.str();
     expect(token_kind::DoubleColon);
-    auto typ_name = parse_identifier(); // <- TODO: might get more complex. -> Dependent Types?
-    if(!str2typ(old.data.str()))
-      return nullptr;
-    auto typ = str2typ(old.data.str());
+
+    auto typ = parse_type();
 
     par_typs.emplace_back(typ);
     params.emplace_back(par_name, std::move(typ));
@@ -207,12 +227,7 @@ Fn::Ptr parser::parse_fn()
   expect(token_kind::RParen);
   expect(token_kind::MinusGreater);
 
-  auto ret = parse_identifier();
-  if(!str2typ(old.data.str()))
-    return nullptr;
-
-  Type::Ptr fn_typ = str2typ(old.data.str());
-  fn_typ = fn_type(std::move(par_typs), std::move(fn_typ));
+  auto fn_typ = fn_type(std::move(par_typs), parse_type());
 
   expect(token_kind::DoubleColonEqual);
   auto body = parse_statement();

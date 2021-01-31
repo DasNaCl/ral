@@ -15,14 +15,21 @@ Type::Ptr mk_pointer(Type::Ptr typ)
 Type::Ptr str2typ(const std::string& str)
 {
   // TODO: Add more
-  if(str == "i32")
+  if(str == "()")
+    return void_type();
+  else if(str == "i32" || str == "int")
     return int_type();
   return nullptr;
 }
 
+Type::Ptr void_type()
+{
+  return std::make_shared<Type>(TypeKind::Void, std::vector<Type::Ptr>{});
+}
+
 Type::Ptr int_type()
 {
-  return std::make_shared<Type>(TypeKind::Int, std::vector<Type::Ptr>());
+  return std::make_shared<Type>(TypeKind::Int, std::vector<Type::Ptr>{});
 }
 
 Type::Ptr fn_type(std::vector<Type::Ptr>&& params, Type::Ptr&& ret)
