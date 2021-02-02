@@ -28,7 +28,7 @@ class parser
   friend std::vector<Fn::Ptr> read(std::string_view module);
   friend std::vector<Fn::Ptr> read_text(const std::string& module);
 public:
-  static constexpr std::size_t lookahead_size = 2;
+  static constexpr std::size_t lookahead_size = 4;
 
   static Node::Ptr read(std::string_view module);
   static Node::Ptr read_text(const std::string& str);
@@ -180,7 +180,7 @@ Type::Ptr parser::parse_type()
   if(accept(token_kind::LParen))
   {
     if(accept(token_kind::RParen))
-      return void_type();
+      return unit_type();
 
     auto ty = parse_type();
     expect(token_kind::RParen);
@@ -353,7 +353,15 @@ Node::Ptr parser::parse_statement()
   if(current.kind == token_kind::Keyword)
   {
     if(current.data == "let")
+    {
+      // let x := ident (
+      //  or
+      // let x := ~ ident (
+      if((next_toks[2].kind == token_kind::Identifier && next_toks[3].kind == token_kind::LParen)
+      || (next_toks[2].kind == token_kind::Tilde && next_toks[3].kind == token_kind::Identifier))
+        return parse_call();
       return parse_let();
+    }
     else if(current.data == "unlet")
       return parse_let(true);
     else if(current.data == "do")
@@ -362,8 +370,6 @@ Node::Ptr parser::parse_statement()
       return parse_if();
     else if(current.data == "from")
       return parse_loop();
-    else if(current.data == "call")
-      return parse_call();
     else
       return mk_error(); // TODO
   }
@@ -395,16 +401,21 @@ Node::Ptr parser::parse_statement()
   return mk_error();
 }
 
+// let x := foo ( e,* )
 Node::Ptr parser::parse_call()
 {
   consume();
-  if(old.data != "call")
-    assert(false);
+  if(old.data != "let")
+    return mk_error();
+  auto store = parse_identifier();
+  expect(token_kind::DoubleColonEqual);
 
+  const bool is_reversed = accept(token_kind::Tilde);
   auto id = parse_identifier();
-
   std::vector<Node::Ptr> params;
+  params.emplace_back(std::move(store));
   params.emplace_back(std::move(id));
+
   expect(token_kind::LParen);
   bool first = true;
   while(current.kind != token_kind::RParen && current.kind != token_kind::EndOfFile)
@@ -415,7 +426,7 @@ Node::Ptr parser::parse_call()
     params.emplace_back(parse_expression());
   }
   expect(token_kind::RParen);
-  return make_node(NodeKind::Call, std::move(params));
+  return make_node(is_reversed ? NodeKind::Uncall : NodeKind::Call, std::move(params));
 }
 
 Node::Ptr parser::parse_identifier()
@@ -452,6 +463,8 @@ Node::Ptr parser::parse_prefix()
   case token_kind::LParen:
   {
     consume();
+    if(accept(token_kind::RParen))
+      return make_node(NodeKind::Unit, std::vector<Node::Ptr>{});
     auto res = parse_expression();
     expect(')');
 
@@ -536,7 +549,6 @@ auto keyword_set = tsl::robin_set<std::string_view>({
   "fn",
   "let",
   "unlet",
-  "call",
   "yield",
   "do",
   "undo",
@@ -797,6 +809,11 @@ restart_get:
   {
     kind = token_kind::Semi;
     data = ";";
+  } break;
+  case '~':
+  {
+    kind = token_kind::Tilde;
+    data = "~";
   } break;
   case ',':
   {

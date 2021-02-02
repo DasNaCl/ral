@@ -23,6 +23,7 @@ inline bool operator<(const Object& lhs, const Object& rhs)
 struct Node;
 
 enum class NodeKind {
+  Unit,
   Num,
   Var,
   OpEq,
@@ -35,6 +36,7 @@ enum class NodeKind {
   Loop,
   Swap,
   Call,
+  Uncall,
   Stmt,
   Fn,
 };

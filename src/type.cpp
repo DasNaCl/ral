@@ -16,15 +16,15 @@ Type::Ptr str2typ(const std::string& str)
 {
   // TODO: Add more
   if(str == "()")
-    return void_type();
+    return unit_type();
   else if(str == "i32" || str == "int")
     return int_type();
   return nullptr;
 }
 
-Type::Ptr void_type()
+Type::Ptr unit_type()
 {
-  return std::make_shared<Type>(TypeKind::Void, std::vector<Type::Ptr>{});
+  return std::make_shared<Type>(TypeKind::Unit, std::vector<Type::Ptr>{});
 }
 
 Type::Ptr int_type()

@@ -8,6 +8,8 @@
 
 struct Interpreter
 {
+  using DataType = std::variant<std::monostate, std::size_t>;
+
   Interpreter(std::ostream& os)
     : os(os)
     , stack()
@@ -20,14 +22,19 @@ struct Interpreter
   {
     switch(n->kind)
     {
-    case NodeKind::Cmp:
     case NodeKind::Num:
-    case NodeKind::Swap:
+    case NodeKind::Unit:
     case NodeKind::Var:
 
+    case NodeKind::Cmp:
+    case NodeKind::Swap:
+
+    case NodeKind::Uncall:
     case NodeKind::Call:  // <- TODO! We need an UNCALL
     {
-      auto k = n->kind;
+      auto k = n->kind == NodeKind::Call   ? NodeKind::Uncall 
+             :(n->kind == NodeKind::Uncall ? NodeKind::Call
+                                           : n->kind);
       auto d = n->data;
 
       std::vector<Node::Ptr> l;
@@ -96,6 +103,11 @@ struct Interpreter
   {
     switch(n->kind)
     {
+    case NodeKind::Unit:
+    {
+      stack.emplace_back(DataType { std::monostate {} });
+      return;
+    }
     case NodeKind::Num: 
     {
       stack.emplace_back(std::get<std::size_t>(n->data));
@@ -113,10 +125,11 @@ struct Interpreter
     case NodeKind::OpEq:
     {
       auto id = std::get<Object>(n->lhs[0]->data).name;
-      auto& var = vars[id];
+      auto var = std::get<std::size_t>(vars[id]);
 
       run(n->lhs[1].get());
-      auto rhs = stack.back(); stack.pop_back();
+      auto rhs_v = stack.back(); stack.pop_back();
+      auto rhs = std::get<std::size_t>(rhs_v);
 
       switch(std::get<BinOpTypes>(n->data))
       {
@@ -125,6 +138,8 @@ struct Interpreter
       case BinOpTypes::Mul: var *= rhs; break;
       case BinOpTypes::Div: var /= rhs; break;
       }
+      // put it back into the variant
+      vars[id] = var;
       return;
     }
     case NodeKind::Cmp:
@@ -205,7 +220,8 @@ struct Interpreter
     case NodeKind::If:
     {
       run(n->lhs[0].get());
-      auto cond = stack.back(); stack.pop_back();
+      auto cond_v = stack.back(); stack.pop_back();
+      auto cond = std::get<std::size_t>(cond_v);
 
       if(cond != 0)
         run(n->lhs[1].get());
@@ -216,11 +232,12 @@ struct Interpreter
     case NodeKind::Loop:
     {
       run(n->lhs[0].get());
-      auto cond1 = stack.back(); stack.pop_back();
+      auto cond1_v = stack.back(); stack.pop_back();
+      auto cond1 = std::get<std::size_t>(cond1_v);
 
       if(cond1 != 0)
       {
-        std::size_t cond2 = 0;
+        DataType cond2 = std::size_t(0);
         do
         {
           // eval statement
@@ -229,26 +246,29 @@ struct Interpreter
           // eval condition
           run(n->lhs[2].get());
           cond2 = stack.back(); stack.pop_back();
-        } while(cond2 == 0);
+        } while(std::get<std::size_t>(cond2) == 0);
       }
       return;
     }
     case NodeKind::Call:
     {
-      auto str = std::get<Object>(n->lhs[0]->data).name;
-      if(str == "print")
+      auto store = std::get<Object>(n->lhs[0]->data).name;
+      auto fn_name = std::get<Object>(n->lhs[1]->data).name;
+      if(fn_name == "print")
       {
-        run(n->lhs[1].get());
-        auto v = stack.back(); stack.pop_back();
+        run(n->lhs[2].get());
+        auto v_v = stack.back(); stack.pop_back();
 
-        std::cout << v << "\n";
+        std::cout << std::get<std::size_t>(v_v) << "\n";
+
+        vars[store] = std::monostate {};
       }
-      else if(str == "read")
+      else if(fn_name == "read")
       {
-        assert(n->lhs[1]->kind == NodeKind::Var);
-        auto str = std::get<Object>(n->lhs[1]->data).name;
+        std::size_t tmp = 0;
+        std::cin >> tmp;
 
-        std::cin >> vars[str];
+        vars[store] = tmp;
       }
       return;
     }
@@ -281,14 +301,14 @@ struct Interpreter
       auto it = vars.find(p.name);
       assert(it != vars.end());
 
-      assert(it->second == args[i]);
+      assert(std::get<std::size_t>(it->second) == args[i]);
       vars.erase(it);
     }
   }
 
   std::ostream& os;
-  std::vector<std::size_t> stack;
-  std::map<std::string, std::size_t> vars;
+  std::vector<DataType> stack;
+  std::map<std::string, DataType> vars;
 };
 
 void interpret(std::ostream& os, const std::vector<Fn::Ptr>& nods)

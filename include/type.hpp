@@ -5,7 +5,7 @@
 #include <set>
 
 enum class TypeKind {
-  Void,
+  Unit,
   Int,
   Ptr,
   Fn,
@@ -32,7 +32,7 @@ struct Type {
 
 Type::Ptr str2typ(const std::string& str);
 
-Type::Ptr void_type();
+Type::Ptr unit_type();
 Type::Ptr int_type();
 Type::Ptr fn_type(std::vector<Type::Ptr>&& params, Type::Ptr&& ret);
 
