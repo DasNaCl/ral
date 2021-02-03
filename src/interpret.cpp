@@ -13,7 +13,13 @@ struct Interpreter
   Interpreter(std::ostream& os)
     : os(os)
     , stack()
+    , fns()
   { stack.reserve(1024 * 1024); }
+
+  void register_fn(const Fn* fn)
+  {
+    fns[fn->name] = fn;
+  }
 
   void run(const Node* n)
   { (*this)(n); }
@@ -254,6 +260,29 @@ struct Interpreter
     {
       auto store = std::get<Object>(n->lhs[0]->data).name;
       auto fn_name = std::get<Object>(n->lhs[1]->data).name;
+
+      auto it = fns.find(fn_name);
+      if(it != fns.end())
+      {
+        auto fn = it->second;
+        assert(fn->params.size() == n->lhs.size() - 2 && "function call arguments must match");
+
+        // set parameter values
+        std::vector<std::size_t> args;
+        args.reserve(fn->params.size());
+        for(std::size_t i = 0; i < fn->params.size(); ++i)
+        {
+          run(n->lhs[i + 2].get());
+
+          args.emplace_back(std::get<std::size_t>(stack.back())); stack.pop_back();
+        }
+        call(fn, std::move(args));
+
+        // TODO: Fix this! We may want to return an int or anything like that as well
+        vars[store] = std::monostate{};
+        return;
+      }
+
       if(fn_name == "print")
       {
         run(n->lhs[2].get());
@@ -270,12 +299,14 @@ struct Interpreter
 
         vars[store] = tmp;
       }
+      else
+        assert(false);
       return;
     }
     }
   }
 
-  void call(Fn* foo, std::vector<std::size_t>&& args)
+  void call(const Fn* foo, std::vector<std::size_t>&& args)
   {
     assert(foo && foo->params.size() == args.size());
 
@@ -309,11 +340,15 @@ struct Interpreter
   std::ostream& os;
   std::vector<DataType> stack;
   std::map<std::string, DataType> vars;
+  std::map<std::string, const Fn*> fns;
 };
 
 void interpret(std::ostream& os, const std::vector<Fn::Ptr>& nods)
 {
   Interpreter interp(os);
+
+  for(auto& x : nods)
+    interp.register_fn(x.get());
 
   Fn* main = nullptr;
   for(auto& x : nods)
